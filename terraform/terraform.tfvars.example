@@ -1,0 +1,21 @@
+# Exemplo de valores para o ambiente dev.
+# Copie para terraform.tfvars e ajuste conforme necessário.
+
+aws_region             = "us-east-1"
+project_name           = "b3-data-pipeline"
+environment            = "dev"
+
+# Glue
+glue_job_timeout       = 60
+glue_number_of_workers = 2
+glue_worker_type       = "G.1X"
+
+# Lambda Trigger Glue
+lambda_timeout         = 30
+lambda_memory_size     = 128
+
+# Lambda Scraper (app Python embarcada)
+scraper_lambda_timeout     = 300
+scraper_lambda_memory_size = 512
+scraper_stocks  = ["PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3", "B3SA3", "WEGE3", "RENT3", "SUZB3", "GGBR4"]
+scraper_indices = ["IBOVESPA", "IBRX100", "IBRX50", "IDIV", "SMALL"]
