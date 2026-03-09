@@ -81,6 +81,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
       storage_class = "STANDARD_IA"
     }
   }
+
+  rule {
+    id     = "refined-data-lifecycle"
+    status = "Enabled"
+
+    filter {
+      prefix = var.refined_data_prefix
+    }
+
+    transition {
+      days          = 180
+      storage_class = "STANDARD_IA"
+    }
+  }
 }
 
 # ---------- Notificação S3 → Lambda ----------
