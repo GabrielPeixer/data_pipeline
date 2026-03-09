@@ -2,7 +2,7 @@
 Glue ETL Job – Processa dados brutos (parquet) da B3.
 
 Lê TODOS os parquets do layer raw/ para o data_type informado,
-aplica as transformações obrigatórias e grava em processed/.
+aplica as transformações obrigatórias e grava em refined/.
 
 Transformações:
   A) Agrupamento numérico – soma de volume, média de preço, contagem.
@@ -44,11 +44,11 @@ data_type = args["DATA_TYPE"]  # stocks ou indices
 
 # Lê TODOS os dados brutos do data_type (não apenas o arquivo recém-chegado)
 input_base = f"s3://{bucket}/raw/{data_type}/"
-detail_output = f"s3://{bucket}/processed/{data_type}/"
-summary_output = f"s3://{bucket}/processed/summary/{data_type}/"
+refined_output = f"s3://{bucket}/refined/{data_type}/"
+summary_output = f"s3://{bucket}/refined/summary/{data_type}/"
 
 print(f"[ETL] Input base: {input_base}")
-print(f"[ETL] Detail output: {detail_output}")
+print(f"[ETL] Refined output: {refined_output}")
 print(f"[ETL] Summary output: {summary_output}")
 print(f"[ETL] Data type: {data_type}")
 print(f"[ETL] Triggered by: s3://{bucket}/{key}")
@@ -130,14 +130,14 @@ print(f"[ETL] Registros após transformações: {df.count()}")
 df.printSchema()
 
 # ================================================================
-# ESCRITA – Layer de detalhe (particionado por data)
+# ESCRITA – Layer refined (particionado por símbolo e data)
 # ================================================================
 (
     df.write.mode("overwrite")
-    .partitionBy("year", "month", "day")
-    .parquet(detail_output)
+    .partitionBy("symbol", "year", "month", "day")
+    .parquet(refined_output)
 )
-print("[ETL] Escrita do layer de detalhe concluída.")
+print("[ETL] Escrita do layer refined concluída.")
 
 # ================================================================
 # TRANSFORMAÇÃO A – Agrupamento numérico / sumarização
@@ -156,7 +156,7 @@ print(f"[ETL] Registros no resumo: {df_summary.count()}")
 df_summary.show(truncate=False)
 
 # ================================================================
-# ESCRITA – Layer de resumo (sumarizado)
+# ESCRITA – Layer de resumo (sumarizado) em refined/summary/
 # ================================================================
 df_summary.write.mode("overwrite").parquet(summary_output)
 print("[ETL] Escrita do layer de resumo concluída.")
