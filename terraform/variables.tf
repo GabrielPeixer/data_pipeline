@@ -62,6 +62,12 @@ variable "processed_data_prefix" {
   default     = "processed/"
 }
 
+variable "refined_data_prefix" {
+  description = "Prefixo dos dados refinados no S3 (saída do Glue ETL)"
+  type        = string
+  default     = "refined/"
+}
+
 # ──────────────── Lambda Scraper ────────────────
 
 variable "scraper_lambda_timeout" {
