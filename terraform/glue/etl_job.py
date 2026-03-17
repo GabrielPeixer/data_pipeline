@@ -2,7 +2,8 @@
 Glue ETL Job – Processa dados brutos (parquet) da B3.
 
 Lê TODOS os parquets do layer raw/ para o data_type informado,
-aplica as transformações obrigatórias e grava em refined/.
+aplica as transformações obrigatórias e grava em refined/ catalogando
+automaticamente no Glue Data Catalog.
 
 Transformações:
   A) Agrupamento numérico – soma de volume, média de preço, contagem.
@@ -15,6 +16,7 @@ from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
 from awsglue.context import GlueContext
 from awsglue.job import Job
+from awsglue.dynamicframe import DynamicFrame
 from pyspark.context import SparkContext
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
@@ -28,6 +30,7 @@ args = getResolvedOptions(
         "S3_BUCKET",
         "S3_KEY",
         "DATA_TYPE",
+        "CATALOG_DB",
     ],
 )
 
@@ -40,7 +43,8 @@ job.init(args["JOB_NAME"], args)
 # ---------- Parâmetros ----------
 bucket = args["S3_BUCKET"]
 key = args["S3_KEY"]
-data_type = args["DATA_TYPE"]  # stocks ou indices
+data_type = args["DATA_TYPE"]   # stocks ou indices
+catalog_db = args["CATALOG_DB"]
 
 # Lê TODOS os dados brutos do data_type (não apenas o arquivo recém-chegado)
 input_base = f"s3://{bucket}/raw/{data_type}/"
@@ -51,6 +55,7 @@ print(f"[ETL] Input base: {input_base}")
 print(f"[ETL] Refined output: {refined_output}")
 print(f"[ETL] Summary output: {summary_output}")
 print(f"[ETL] Data type: {data_type}")
+print(f"[ETL] Catalog DB: {catalog_db}")
 print(f"[ETL] Triggered by: s3://{bucket}/{key}")
 
 # ================================================================
@@ -130,14 +135,27 @@ print(f"[ETL] Registros após transformações: {df.count()}")
 df.printSchema()
 
 # ================================================================
-# ESCRITA – Layer refined (particionado por símbolo e data)
+# ESCRITA + CATALOGAÇÃO – Layer refined (Req 6 + Req 7)
+# Particionado por símbolo e data, tabela criada/atualizada no Catalog.
 # ================================================================
-(
-    df.write.mode("overwrite")
-    .partitionBy("symbol", "year", "month", "day")
-    .parquet(refined_output)
+dyf_refined = DynamicFrame.fromDF(df, glueContext, "dyf_refined")
+
+sink_refined = glueContext.getSink(
+    connection_type="s3",
+    path=refined_output,
+    enableUpdateCatalog=True,
+    updateBehavior="UPDATE_IN_DATABASE",
+    partitionKeys=["symbol", "year", "month", "day"],
+    transformation_ctx="sink_refined",
 )
-print("[ETL] Escrita do layer refined concluída.")
+sink_refined.setCatalogInfo(
+    catalogDatabase=catalog_db,
+    catalogTableName=f"refined_{data_type}",
+)
+sink_refined.setFormat("glueparquet", compression="snappy")
+sink_refined.writeFrame(dyf_refined)
+
+print(f"[ETL] Escrita e catalogação do layer refined concluída → {catalog_db}.refined_{data_type}")
 
 # ================================================================
 # TRANSFORMAÇÃO A – Agrupamento numérico / sumarização
@@ -156,10 +174,26 @@ print(f"[ETL] Registros no resumo: {df_summary.count()}")
 df_summary.show(truncate=False)
 
 # ================================================================
-# ESCRITA – Layer de resumo (sumarizado) em refined/summary/
+# ESCRITA + CATALOGAÇÃO – Layer de resumo (sumarizado)
 # ================================================================
-df_summary.write.mode("overwrite").parquet(summary_output)
-print("[ETL] Escrita do layer de resumo concluída.")
+dyf_summary = DynamicFrame.fromDF(df_summary, glueContext, "dyf_summary")
+
+sink_summary = glueContext.getSink(
+    connection_type="s3",
+    path=summary_output,
+    enableUpdateCatalog=True,
+    updateBehavior="UPDATE_IN_DATABASE",
+    partitionKeys=["symbol"],
+    transformation_ctx="sink_summary",
+)
+sink_summary.setCatalogInfo(
+    catalogDatabase=catalog_db,
+    catalogTableName=f"summary_{data_type}",
+)
+sink_summary.setFormat("glueparquet", compression="snappy")
+sink_summary.writeFrame(dyf_summary)
+
+print(f"[ETL] Escrita e catalogação do layer de resumo concluída → {catalog_db}.summary_{data_type}")
 
 job.commit()
 print("[ETL] Job finalizado.")
