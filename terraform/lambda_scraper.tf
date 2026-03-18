@@ -51,10 +51,15 @@ resource "null_resource" "scraper_docker_build" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["PowerShell", "-Command"]
+    command     = <<-EOT
+      $ErrorActionPreference = 'Stop'
       aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${aws_ecr_repository.scraper.repository_url}
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       docker build -t ${aws_ecr_repository.scraper.repository_url}:latest -f ${path.module}/lambda/Dockerfile.scraper ${path.module}/lambda/
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       docker push ${aws_ecr_repository.scraper.repository_url}:latest
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     EOT
   }
 
