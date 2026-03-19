@@ -16,7 +16,7 @@ resource "aws_glue_job" "etl" {
   description  = "ETL job que processa dados brutos da B3 (parquet), grava no layer refined e cataloga no Glue Catalog."
   role_arn     = aws_iam_role.glue_etl.arn
   glue_version = "4.0"
-  max_retries  = 1
+  max_retries  = 0
   timeout      = var.glue_job_timeout
 
   worker_type       = var.glue_worker_type
@@ -30,7 +30,7 @@ resource "aws_glue_job" "etl" {
 
   default_arguments = {
     "--job-language"                     = "python"
-    "--job-bookmark-option"              = "job-bookmark-enable"
+    "--job-bookmark-option"              = "job-bookmark-disable"
     "--TempDir"                          = "s3://${aws_s3_bucket.data_lake.id}/glue-temp/"
     "--enable-metrics"                   = "true"
     "--enable-continuous-cloudwatch-log"  = "true"
